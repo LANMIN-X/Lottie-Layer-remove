@@ -3,7 +3,7 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <title>Lottie 图层删除</title>
+    <title>Lottie 图层删除（多选版）</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
     <style>
         body {
@@ -42,6 +42,7 @@
             border-radius: 5px;
             cursor: pointer;
             margin: 5px;
+            vertical-align: top;
         }
         button:hover {
             background: #0056b3;
@@ -60,15 +61,19 @@
         .input-group {
             margin: 10px 0;
             display: inline-block;
+            vertical-align: top;
         }
         .input-group label {
             margin-right: 10px;
+            display: block;
+            margin-bottom: 5px;
         }
         .input-group select {
             padding: 8px;
             border: 1px solid #ccc;
             border-radius: 4px;
-            width: 200px;
+            width: 250px;
+            height: 150px; /* 让多选框有足够的高度 */
             background-color: white;
         }
         .input-group select:disabled {
@@ -78,15 +83,15 @@
     </style>
 </head>
 <body>
-    <h1>Lottie 图层删除（仅用于学习）</h1>
+    <h1>Lottie 图层删除（可多选，仅用于学习）</h1>
     
     <div class="controls">
         <input type="file" id="uploadInput" accept=".json">
         <button id="uploadBtn">上传 JSON 文件</button>
         <div class="input-group">
-            <label for="layerSelect">选择图层：</label>
-            <select id="layerSelect" disabled>
-                <option value="">请先上传文件</option>
+            <label for="layerSelect">选择要删除的图层 (按住 Ctrl/Cmd 可多选):</label>
+            <select id="layerSelect" disabled multiple>
+                <option value="" disabled>请先上传文件</option>
             </select>
         </div>
         <button id="processBtn" disabled>处理文件</button>
@@ -97,7 +102,7 @@
 
     <div class="container">
         <div class="preview-container">
-            <h3>原始动画</h3>
+            <h3>原始动画 (高亮预览)</h3>
             <div id="originalPreview" class="preview-box"></div>
         </div>
         <div class="preview-container">
@@ -127,121 +132,81 @@
             }
             return layers;
         }
-// 修改图层选择事件监听器
-document.getElementById('layerSelect').addEventListener('change', (e) => {
-    const selectedLayer = e.target.value;
-    
-    if (!selectedLayer) {
-        // 重置为原始动画
-        if (originalAnimation) {
-            originalAnimation.destroy();
-        }
-        originalAnimation = initPreview(
-            document.getElementById('originalPreview'),
-            originalData
-        );document.getElementById('status').textContent = '请选择要删除的图层';
-    } else {
-        highlightLayer(selectedLayer);
-        document.getElementById('status').textContent = `已选择图层: ${selectedLayer}`;
-    }
-});
 
-// 修改高亮显示函数
-function highlightLayer(layerName) {
-    if (!originalData || !originalAnimation || !layerName) return;
-    
-    // 获取原始动画容器
-    const originalPreview = document.getElementById('originalPreview');
-    
-    // 销毁原有动画
-    if (originalAnimation) {
-        originalAnimation.destroy();
-    }
-
-    // 如果没有选择图层，显示完整动画
-    if (!layerName) {
-        originalAnimation = initPreview(originalPreview, originalData);
-        return;
-    }
-
-    // 创建一个新的数据副本
-    const highlightData = JSON.parse(JSON.stringify(originalData));
-    
-    // 找到目标图层
-    const selectedLayer = highlightData.layers.find(layer => layer.nm === layerName);
-    if (!selectedLayer) {
-        originalAnimation = initPreview(originalPreview, originalData);
-        return;
-    }
-
-    const targetId = selectedLayer.ind;
-    
-    // 修改其他图层的透明度
-    highlightData.layers.forEach(layer => {
-        if (layer.nm !== layerName && layer.parent !== targetId) {
-            // 如果图层有 transform，修改其不透明度
-            if (!layer.ks) layer.ks = {};
-            if (!layer.ks.o) {
-                layer.ks.o = { k: 30 }; // 设置30%透明度
-            } else if (typeof layer.ks.o === 'object') {
-                if (Array.isArray(layer.ks.o.k)) {
-                    layer.ks.o.k.forEach(keyframe => {
-                        keyframe.s = keyframe.s ? keyframe.s * 0.3 : 30;
-                    });
-                } else {
-                    layer.ks.o.k = 30;
-                }
-            }
-        }
-    });
-
-    // 创建新的动画
-    originalAnimation = initPreview(originalPreview, highlightData);
-}
-
-
-        function removeLottieLayer(lottieData, targetLayerName) {
-            // 深拷贝数据以避免修改原始数据
-            const data = JSON.parse(JSON.stringify(lottieData));
+        // 高亮显示选中的图层 (通过调暗其他图层)
+        function highlightLayer(selectedLayerNames) {
+            if (!originalData) return;
             
-            // 找到目标图层的ID
-            let targetLayerId = null;
-            for (let i = 0; i < data.layers.length; i++) {
-                const layer = data.layers[i];
-                if (layer.nm === targetLayerName) {
-                    targetLayerId = layer.ind || (i + 1);
-                    break;
-                }
+            if (originalAnimation) {
+                originalAnimation.destroy();
             }
 
-            if (targetLayerId === null) {
-                throw new Error(`未找到指定图层: ${targetLayerName}`);
+            // 如果没有选择图层，或选择数组为空，则显示原始动画
+            if (!selectedLayerNames || selectedLayerNames.length === 0) {
+                originalAnimation = initPreview(document.getElementById('originalPreview'), originalData);
+                return;
             }
 
-            // 找出要删除的图层索引
-            const indexesToRemove = [];
-            data.layers.forEach((layer, index) => {
-                // 如果是目标图层本身
-                if (layer.nm === targetLayerName) {
-                    indexesToRemove.push(index);
-                }
-                // 如果是目标图层的直接子图层
-                else if (layer.parent === targetLayerId) {
-                    indexesToRemove.push(index);
+            const highlightData = JSON.parse(JSON.stringify(originalData));
+            const selectedNamesSet = new Set(selectedLayerNames);
+
+            highlightData.layers.forEach(layer => {
+                // 如果图层未被选中，则将其透明度设为30%
+                if (!selectedNamesSet.has(layer.nm)) {
+                    if (!layer.ks) layer.ks = {};
+                    // 通过覆盖透明度属性来实现“调暗”，这是最简单可靠的方法
+                    layer.ks.o = { a: 0, k: 30 }; // a:0 表示非动画, k:30 表示值为30
                 }
             });
 
-            // 从后向前删除图层
-            indexesToRemove.sort((a, b) => b - a);
-            indexesToRemove.forEach(index => {
-                data.layers.splice(index, 1);
+            originalAnimation = initPreview(document.getElementById('originalPreview'), highlightData);
+        }
+
+        // 删除指定的多个 Lottie 图层及其所有子图层
+        function removeLottieLayers(lottieData, targetLayerNames) {
+            const data = JSON.parse(JSON.stringify(lottieData));
+            const targetNamesSet = new Set(targetLayerNames);
+            const idsToRemove = new Set();
+            
+            // 构建父-子关系图，并找到初始要删除的图层ID
+            const parentToChildren = {};
+            data.layers.forEach(layer => {
+                if (targetNamesSet.has(layer.nm)) {
+                    idsToRemove.add(layer.ind);
+                }
+                if (layer.parent) {
+                    if (!parentToChildren[layer.parent]) {
+                        parentToChildren[layer.parent] = [];
+                    }
+                    parentToChildren[layer.parent].push(layer);
+                }
             });
 
+            // 使用队列广度优先搜索，找到所有子孙图层的ID
+            const queue = [...idsToRemove];
+            const visited = new Set(queue); // 避免重复处理
+
+            while (queue.length > 0) {
+                const parentId = queue.shift();
+                const children = parentToChildren[parentId] || [];
+                children.forEach(child => {
+                    if (!visited.has(child.ind)) {
+                        idsToRemove.add(child.ind);
+                        visited.add(child.ind);
+                        queue.push(child.ind);
+                    }
+                });
+            }
+
+            // 过滤掉所有需要删除的图层
+            data.layers = data.layers.filter(layer => !idsToRemove.has(layer.ind));
             return data;
         }
 
         // 初始化动画预览
         function initPreview(container, data) {
+            // 清空容器内容，防止多个 SVG 叠加
+            container.innerHTML = '';
             return lottie.loadAnimation({
                 container: container,
                 renderer: 'svg',
@@ -250,20 +215,14 @@ function highlightLayer(layerName) {
                 animationData: data
             });
         }
+        
+        // 获取多选框中的所有选中值
+        function getSelectedValues(selectElement) {
+            return Array.from(selectElement.selectedOptions).map(option => option.value);
+        }
 
-        // 图层选择事件
-        document.getElementById('layerSelect').addEventListener('change', (e) => {
-            const selectedLayer = e.target.value;
-            if (selectedLayer) {
-                highlightLayer(selectedLayer);
-                document.getElementById('status').textContent = `已选择图层: ${selectedLayer}`;
-            } else {
-                highlightLayer(null); // 清除高亮
-                document.getElementById('status').textContent = '请选择要删除的图层';
-            }
-        });
+        // --- 事件监听器 ---
 
-        // 事件监听器
         document.getElementById('uploadBtn').addEventListener('click', () => {
             document.getElementById('uploadInput').click();
         });
@@ -276,116 +235,116 @@ function highlightLayer(layerName) {
             reader.onload = (event) => {
                 try {
                     originalData = JSON.parse(event.target.result);
-                    // 清除之前的动画
-                    if (originalAnimation) {
-                        originalAnimation.destroy();
-                    }
+                    
+                    // 清除之前的预览
+                    if (originalAnimation) originalAnimation.destroy();
+                    if (processedAnimation) processedAnimation.destroy();
+                    document.getElementById('processedPreview').innerHTML = '';
                     
                     // 显示原始动画
-                    originalAnimation = initPreview(
-                        document.getElementById('originalPreview'),
-                        originalData
-                    );
+                    originalAnimation = initPreview(document.getElementById('originalPreview'), originalData);
 
                     // 更新图层选择下拉框
                     const layerSelect = document.getElementById('layerSelect');
                     layerSelect.innerHTML = ''; // 清除现有选项
                     
-                    // 添加默认选项
-                    const defaultOption = document.createElement('option');
-                    defaultOption.value = '';
-                    defaultOption.text = '请选择要删除的图层';
-                    layerSelect.appendChild(defaultOption);
-                    
-                    // 添加图层选项
                     const layers = getLayers(originalData);
-                    layers.forEach(layer => {
-                        const option = document.createElement('option');
-                        option.value = layer.name;
-                        option.text = `${layer.name} (ID: ${layer.id})`;
-                        layerSelect.appendChild(option);
-                    });
-
-                    // 启用选择框和处理按钮
-                    layerSelect.disabled = false;
-                    document.getElementById('processBtn').disabled = false;
-                    document.getElementById('status').textContent = '文件已加载，请选择要删除的图层';
+                    if (layers.length === 0) {
+                       const option = document.createElement('option');
+                       option.text = '未找到带名称的图层';
+                       option.disabled = true;
+                       layerSelect.appendChild(option);
+                       document.getElementById('processBtn').disabled = true;
+                    } else {
+                       layers.forEach(layer => {
+                           const option = document.createElement('option');
+                           option.value = layer.name;
+                           option.text = `${layer.name} (ID: ${layer.id})`;
+                           layerSelect.appendChild(option);
+                       });
+                       // 启用选择框和处理按钮
+                       layerSelect.disabled = false;
+                       document.getElementById('processBtn').disabled = false;
+                    }
                     
-                    // 清除之前的高亮
-                    highlightLayer(null);
+                    document.getElementById('status').textContent = '文件已加载，请选择要删除的图层。';
+                    document.getElementById('downloadBtn').disabled = true;
+                    document.getElementById('downloadMinBtn').disabled = true;
+
                 } catch (error) {
-                    document.getElementById('status').textContent = '无效的 JSON 文件';
+                    document.getElementById('status').textContent = '文件加载失败：无效的 JSON 文件。';
+                    console.error(error);
                 }
             };
             reader.readAsText(file);
         });
 
-        document.getElementById('processBtn').addEventListener('click', () => {
-            try {
-                const layerSelect = document.getElementById('layerSelect');
-                const layerName = layerSelect.value;
-                
-                if (!layerName) {
-                    document.getElementById('status').textContent = '请选择要删除的图层';
-                    return;
-                }
+        document.getElementById('layerSelect').addEventListener('change', (e) => {
+            const selectedNames = getSelectedValues(e.target);
+            highlightLayer(selectedNames);
 
-                processedData = removeLottieLayer(originalData, layerName);
+            if (selectedNames.length > 0) {
+                document.getElementById('status').textContent = `已选择 ${selectedNames.length} 个图层。`;
+            } else {
+                document.getElementById('status').textContent = '请选择要删除的图层。';
+            }
+        });
+
+        document.getElementById('processBtn').addEventListener('click', () => {
+            const layerSelect = document.getElementById('layerSelect');
+            const selectedNames = getSelectedValues(layerSelect);
+            
+            if (!originalData || selectedNames.length === 0) {
+                document.getElementById('status')。textContent = '错误：请至少选择一个要删除的图层。';
+                return;
+            }
+
+            try {
+                processedData = removeLottieLayers(originalData， selectedNames);
                 
-                // 清除之前的动画
                 if (processedAnimation) {
-                    processedAnimation.destroy();
+                    processedAnimation。destroy();
                 }
                 
                 // 显示处理后的动画
                 processedAnimation = initPreview(
-                    document.getElementById('processedPreview'),
+                    document。getElementById('processedPreview')，
                     processedData
                 );
 
-                // 清除高亮
-                highlightLayer(null);
+                // 恢复原始预览区为完整动画
+                highlightLayer([]);
 
-                document.getElementById('downloadBtn').disabled = false;
-                document.getElementById('downloadMinBtn').disabled = false;
-                document.getElementById('status').textContent = '处理完成';
+                document。getElementById('downloadBtn')。disabled = false;
+                document。getElementById('downloadMinBtn')。disabled = false;
+                document。getElementById('status')。textContent = `处理完成，已成功删除 ${selectedNames.length} 个图层及其子图层。`;
+
             } catch (error) {
                 document.getElementById('status').textContent = '处理失败: ' + error.message;
+                console。error(error);
             }
         });
 
-        document.getElementById('downloadBtn').addEventListener('click', () => {
+        document。getElementById('downloadBtn')。addEventListener('click', () => {
             if (!processedData) return;
-
-            const blob = new Blob([JSON.stringify(processedData, null, 2)], {
-                type: 'application/json'
-            });
+            const blob = new Blob([JSON.stringify(processedData, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = 'processed-animation.json';
-            document.body.appendChild(a);
             a.click();
-            document.body.removeChild(a);
             URL.revokeObjectURL(url);
         });
 
         document.getElementById('downloadMinBtn').addEventListener('click', () => {
             if (!processedData) return;
-
-            // 创建压缩版数据（移除空格和缩进）
             const minifiedData = JSON.stringify(processedData);
-            
-            const blob = new Blob([minifiedData], {
-                type: 'application/json'
-            });
+            const blob = new Blob([minifiedData], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = 'processed-animation.min.json';
-            document.body.appendChild(a);
             a.click();
-            document.body.removeChild(a);
             URL.revokeObjectURL(url);
         });
     </script>
